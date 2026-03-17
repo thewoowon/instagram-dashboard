@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { type PostDraft } from "@/types";
 import { approveDraft, updateDraft } from "@/lib/api";
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 import { AssetUploader } from "@/components/approval/asset-uploader";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -67,6 +69,9 @@ export function DraftDetailClient({ draft }: DraftDetailClientProps) {
   const [hook, setHook] = useState(draft.hook);
   const [cta, setCta] = useState(draft.cta);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState(
+    new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString().slice(0, 16)
+  );
 
   const brandName = draft.account?.brand_name ?? "unknown";
   const accountLabel = brandName === "mistakr" ? "Mistakr" : "100:0LAB";
@@ -90,6 +95,35 @@ export function DraftDetailClient({ draft }: DraftDetailClientProps) {
     setIsSubmitting(true);
     try {
       await approveDraft(draft.id, "reject");
+      router.push("/approval");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePublishNow = async () => {
+    if (!confirm("지금 바로 Instagram에 발행할까요?")) return;
+    setIsSubmitting(true);
+    try {
+      await updateDraft(draft.id, { hook, caption, cta });
+      const res = await fetch(`${BASE_URL}/api/v1/drafts/${draft.id}/publish`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail ?? "발행 실패");
+      }
+      router.push("/approval");
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSchedule = async () => {
+    setIsSubmitting(true);
+    try {
+      await updateDraft(draft.id, { hook, caption, cta });
+      await approveDraft(draft.id, "approve", new Date(scheduledAt).toISOString());
       router.push("/approval");
     } finally {
       setIsSubmitting(false);
@@ -140,11 +174,20 @@ export function DraftDetailClient({ draft }: DraftDetailClientProps) {
             반려
           </button>
           <button
+            onClick={handleSchedule}
             disabled={isSubmitting}
             className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-muted text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
           >
             <Calendar className="w-4 h-4" />
             예약
+          </button>
+          <button
+            onClick={handlePublishNow}
+            disabled={isSubmitting}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
+          >
+            <Zap className="w-4 h-4" />
+            지금 발행
           </button>
           <button
             onClick={handleApprove}
@@ -315,9 +358,8 @@ export function DraftDetailClient({ draft }: DraftDetailClientProps) {
             <input
               type="datetime-local"
               className="w-full bg-muted/50 border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              defaultValue={new Date(Date.now() + 1000 * 60 * 60 * 24)
-                .toISOString()
-                .slice(0, 16)}
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
             />
           </Card>
         </div>

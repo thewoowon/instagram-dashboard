@@ -1,8 +1,45 @@
-export default function AnalyticsPage() {
+import { AnalyticsDashboard } from "@/components/analytics/analytics-dashboard";
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+async function getOverview(accountId?: string) {
+  const qs = accountId ? `?account_id=${accountId}` : "";
+  const res = await fetch(`${BASE_URL}/api/v1/analytics/overview${qs}`, { cache: "no-store" });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function getDraftAnalytics(accountId?: string) {
+  const qs = accountId ? `?account_id=${accountId}` : "";
+  const res = await fetch(`${BASE_URL}/api/v1/analytics/drafts${qs}`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+async function getAccounts() {
+  const res = await fetch(`${BASE_URL}/api/v1/accounts`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ account_id?: string }>;
+}) {
+  const params = await searchParams;
+  const [overview, drafts, accounts] = await Promise.all([
+    getOverview(params.account_id),
+    getDraftAnalytics(params.account_id),
+    getAccounts(),
+  ]);
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-xl font-semibold mb-1">애널리틱스</h1>
-      <p className="text-sm text-muted-foreground">성과 데이터 대시보드 (Phase 2)</p>
-    </div>
+    <AnalyticsDashboard
+      overview={overview}
+      drafts={drafts}
+      accounts={accounts}
+      selectedAccountId={params.account_id}
+    />
   );
 }
